@@ -1,0 +1,122 @@
+﻿services:
+  # ---------------------------------------------------------------------------
+  # 1. TimescaleDB / PostgreSQL Hypertable Storage
+  # ---------------------------------------------------------------------------
+  db:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-apix}
+      POSTGRES_USER: ${POSTGRES_USER:-apix}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apix_secret}
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-apix} -d ${POSTGRES_DB:-apix}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # 2. Redis Task Broker & Result Backend
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # 3. Web API & Dashboard Tier (Runtime Target)
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    env_file: .env.docker
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # 4. Collector Worker (Browser Target: Playwright + Chromium)
+  # ---------------------------------------------------------------------------
+  worker_collection:
+    build:
+      context: .
+      target: browser
+    restart: unless-stopped
+    shm_size: "1gb"
+    env_file: .env.docker
+    command: ["celery", "-A", "config", "worker", "-Q", "collection", "-c", "2", "--max-tasks-per-child", "24", "-l", "INFO"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # 5. Cleaning Worker (Runtime Target: CPU/DB bound)
+  # ---------------------------------------------------------------------------
+  worker_cleaning:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    env_file: .env.docker
+    command: ["celery", "-A", "config", "worker", "-Q", "cleaning", "-c", "4", "-l", "INFO"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # 6. Statistics Worker (Runtime Target: Strictly Serialized Concurrency = 1)
+  # ---------------------------------------------------------------------------
+  worker_statistics:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    env_file: .env.docker
+    command: ["celery", "-A", "config", "worker", "-Q", "statistics,default", "-c", "1", "-l", "INFO"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # 7. Celery Beat Scheduler (Periodic Daily Basket Triggers)
+  # ---------------------------------------------------------------------------
+  beat:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    env_file: .env.docker
+    command: ["celery", "-A", "config", "beat", "-l", "INFO"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  timescale_data:
+  redis_data:

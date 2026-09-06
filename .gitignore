@@ -9,3 +9,4 @@ __pycache__/
 .env
 local_settings.py
 *.backup
+.env.docker
