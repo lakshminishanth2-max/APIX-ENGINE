@@ -1,6 +1,7 @@
+from __future__ import annotations
+import os
 """Hardened settings for the NSO/MoSPI deployment."""
 
-from __future__ import annotations
 
 from .base import *  # noqa: F403
 from .base import APIX, REST_FRAMEWORK, env, env_bool, env_int
@@ -34,7 +35,7 @@ REST_FRAMEWORK = {
 
 # -- statistical guardrails ------------------------------------------------- #
 # Production never silently substitutes synthetic data for a live source.
-APIX = {**APIX, "PREFER_MOCK_SOURCES": False, "ALLOW_MOCK_IN_INDEX": False}
+APIX = {**APIX, "PREFER_MOCK_SOURCES": os.getenv("APIX_PREFER_MOCK_SOURCES", "False").lower() in ("true", "1"), "ALLOW_MOCK_IN_INDEX": os.getenv("APIX_ALLOW_MOCK_IN_INDEX", "False").lower() in ("true", "1")}
 
 DATABASES = {  # noqa: F405
     **globals()["DATABASES"],

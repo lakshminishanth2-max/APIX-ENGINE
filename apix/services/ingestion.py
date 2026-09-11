@@ -20,10 +20,10 @@ us is the exact behaviour the compliance policy forbids.  The run is marked
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
-from collections.abc import Iterable, Sequence
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
@@ -262,10 +262,12 @@ class CollectionService:
     def _final_status(result: IngestionResult) -> str:
         if result.sources_halted:
             return CollectionStatus.BLOCKED
-        if result.raw_created == 0:
-            return CollectionStatus.FAILED if result.tasks_attempted else CollectionStatus.SUCCEEDED
+        if result.tasks_failed and not (result.raw_created or result.raw_duplicate):
+            return CollectionStatus.FAILED
         if result.tasks_failed or result.tasks_blocked:
             return CollectionStatus.PARTIAL
+        if result.raw_created == 0 and result.raw_duplicate == 0 and result.tasks_attempted:
+            return CollectionStatus.FAILED
         return CollectionStatus.SUCCEEDED
 
 
