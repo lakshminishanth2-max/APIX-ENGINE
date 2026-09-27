@@ -15,9 +15,15 @@ Queue topology
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import sys
 from typing import Any
+
+# Ensure Windows asyncio supports subprocess creation for Playwright
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from celery import Celery, Task
 from celery.signals import setup_logging, task_postrun, task_prerun

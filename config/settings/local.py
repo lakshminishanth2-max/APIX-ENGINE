@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import os
+
+# Allow synchronous Django ORM operations inside Playwright's asyncio event loop
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
 from .base import *  # noqa: F403
 from .base import APIX, REST_FRAMEWORK, env_bool
 
